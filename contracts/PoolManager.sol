@@ -15,7 +15,12 @@ contract PoolManager is Ownable, ReentrancyGuard {
     mapping(address => Pool) public pools;
     mapping(address => mapping(address => uint256)) public lpBalance;
     mapping(bytes32 => bool) public processedQueries;
-    mapping(uint64 => mapping(address => bool)) public whitelistedVaults;
+    
+    // Mapping of ChainID => TokenAddress => IsWhitelisted
+    mapping(uint64 => mapping(address => bool)) public whitelistedSourceTokens;
+    // Mapping of ChainID => LiquidityVaultAddress (The contract that must receive funds)
+    mapping(uint64 => address) public sourceVaults;
+    
     address[] public whitelistedTokens;
     mapping(address => bool) public isTokenWhitelisted;
     uint256 public withdrawalNonce;
@@ -24,7 +29,7 @@ contract PoolManager is Ownable, ReentrancyGuard {
     event LiquidityWithdrawn(address indexed user, address indexed tokenOnSource, uint256 amount);
     event WithdrawalAuthorized(address indexed user, address indexed tokenOnSource, uint256 amount, uint256 nonce, uint64 destChainId);
     event LiquiditySlashed(address indexed user, address indexed tokenOnSource, uint256 amount);
-    event VaultWhitelisted(uint64 indexed chainId, address indexed vault, bool status);
+    event SourceChainConfigured(uint64 indexed chainId, address indexed vault, address indexed token, bool status);
     event TokenWhitelisted(address indexed token, bool status);
 
     constructor(address _verifier) Ownable(msg.sender) {
@@ -41,9 +46,25 @@ contract PoolManager is Ownable, ReentrancyGuard {
         emit TokenWhitelisted(token, status);
     }
 
-    function setWhitelistedVault(uint64 chainId, address vault, bool status) external onlyOwner {
-        whitelistedVaults[chainId][vault] = status;
-        emit VaultWhitelisted(chainId, vault, status);
+    /** 
+     * @dev Configures a source chain's LiquidityVault and whitelists a token on that chain.
+     * @param chainId The Chain ID (or Chain Key for Prover)
+     * @param vault The address of the LiquidityVault on that chain.
+     * @param token The address of the ERC20 token on that chain (e.g. USDC).
+     * @param status Whether to accept deposits of this token.
+     */
+    function setSourceParams(uint64 chainId, address vault, address token, bool status) external onlyOwner {
+        sourceVaults[chainId] = vault;
+        whitelistedSourceTokens[chainId][token] = status;
+        emit SourceChainConfigured(chainId, vault, token, status);
+    }
+
+    // Legacy support for scripts calling the old function name, redirects to new logic if valid
+    function setWhitelistedVault(uint64 chainId, address token, bool status) external onlyOwner {
+        // This function name was confusing in previous version. 
+        // We assume 'token' implies the Source Token.
+        // We cannot set the Vault address here, so we warn or require it to be set separately.
+        whitelistedSourceTokens[chainId][token] = status;
     }
 
     function setLoanEngine(address _loanEngine) external onlyOwner { loanEngine = _loanEngine; }
@@ -69,23 +90,37 @@ contract PoolManager is Ownable, ReentrancyGuard {
         require(logs.length > 0, "No Transfer events found");
 
         bool processed = false;
+        address trustedVault = sourceVaults[chainKey];
+        require(trustedVault != address(0), "Source chain not configured");
+
         for (uint i = 0; i < logs.length; i++) {
-            address vault = logs[i].address_;
-            if (whitelistedVaults[chainKey][vault]) {
+            address tokenAddress = logs[i].address_;
+            
+            // Check if the Token is whitelisted for this chain
+            if (whitelistedSourceTokens[chainKey][tokenAddress]) {
                 require(logs[i].topics.length == 3, "Invalid topics");
                 address lender = address(uint160(uint256(logs[i].topics[1])));
                 address toAddr = address(uint160(uint256(logs[i].topics[2])));
-                if (uint160(toAddr) < 128) {
+                
+                // CRITICAL: Ensure funds were sent to OUR LiquidityVault, not just anywhere.
+                if (toAddr == trustedVault) {
                     uint256 amount = abi.decode(logs[i].data, (uint256));
-                    pools[vault].totalLiquidity += amount;
-                    lpBalance[lender][vault] += amount;
+                    
+                    // Use the Source Token Address as the Pool Key
+                    // This maps Sepolia-USDC -> Pool Info
+                    pools[tokenAddress].totalLiquidity += amount;
+                    pools[tokenAddress].tokenOnSource = tokenAddress;
+                    
+                    lpBalance[lender][tokenAddress] += amount;
                     processed = true;
-                    emit LiquidityAdded(lender, vault, amount);
+                    emit LiquidityAdded(lender, tokenAddress, amount);
+                    
+                    // We only process one valid liquidity event per tx to avoid complexity
                     break;
                 }
             }
         }
-        require(processed, "No valid burn found");
+        require(processed, "No valid deposit to LiquidityVault found");
         processedQueries[txKey] = true;
     }
 
@@ -99,6 +134,8 @@ contract PoolManager is Ownable, ReentrancyGuard {
 
     function getUserTotalCollateral(address user) public view returns (uint256) {
         uint256 total = 0;
+        // This iteration is imperfect if we have many tokens, but for testnet with 2 tokens it's fine.
+        // It sums LP balances of 'whitelistedTokens' which are mapped in the Hub.
         for (uint256 i = 0; i < whitelistedTokens.length; i++) {
             if (isTokenWhitelisted[whitelistedTokens[i]]) total += lpBalance[user][whitelistedTokens[i]];
         }

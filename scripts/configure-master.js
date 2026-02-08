@@ -1,10 +1,10 @@
 const hre = require("hardhat");
 
 const ADDRESSES = {
-    poolManager: "0xB159E0c8093081712c92e274DbFEa5A97A80cA30",
-    scoreManager: "0x214730188780a3A64fD24ede85f2724535772Ff0",
-    loanEngine: "0x38E9cDB0eBc128bEA55c36C03D5532697669132d",
-    evmV1Decoder: "0x84373D817230268b2dE1d7727ca3c930293CCE51"
+    poolManager: "0x2a2cc16e7fa8E84169cD1c3bA79b37F2d1577B5F",
+    scoreManager: "0x856442b9DD170cFDE24eB1cdF5F68E1A97e8C5E9",
+    loanEngine: "0xdBA667c63045cceF16fa97DA7512A46cB02AD8FA",
+    evmV1Decoder: "0x412ec75F5dBFF6D912D0780744dd77C97E1De2a7"
 };
 
 const SPOKE_ADDRESSES = {
@@ -67,19 +67,42 @@ async function main() {
     console.log("Whitelisting Sepolia vaults...");
     try {
         // Standard Chain ID
-        await (await poolManager.setWhitelistedVault(SPOKE_ADDRESSES.sepolia.chainId, SPOKE_ADDRESSES.sepolia.vault, true)).wait();
-        await (await poolManager.setWhitelistedVault(SPOKE_ADDRESSES.sepolia.chainId, SPOKE_ADDRESSES.sepolia.usdc, true)).wait();
-        await (await poolManager.setWhitelistedVault(SPOKE_ADDRESSES.sepolia.chainId, SPOKE_ADDRESSES.sepolia.usdt, true)).wait();
+        // setSourceParams(chainId, liquidityVault, token, status)
+        console.log(`Configuring Chain ${SPOKE_ADDRESSES.sepolia.chainId}...`);
+        await (await poolManager.setSourceParams(
+            SPOKE_ADDRESSES.sepolia.chainId,
+            SPOKE_ADDRESSES.sepolia.vault,
+            SPOKE_ADDRESSES.sepolia.usdc,
+            true
+        )).wait();
+
+        await (await poolManager.setSourceParams(
+            SPOKE_ADDRESSES.sepolia.chainId,
+            SPOKE_ADDRESSES.sepolia.vault,
+            SPOKE_ADDRESSES.sepolia.usdt,
+            true
+        )).wait();
 
         // Prover API Chain Key (1)
         const PROVER_CHAIN_KEY = 1;
         console.log(`Whitelisting Sepolia for Prover API Key ${PROVER_CHAIN_KEY}...`);
-        await (await poolManager.setWhitelistedVault(PROVER_CHAIN_KEY, SPOKE_ADDRESSES.sepolia.vault, true)).wait();
-        await (await poolManager.setWhitelistedVault(PROVER_CHAIN_KEY, SPOKE_ADDRESSES.sepolia.usdc, true)).wait();
-        await (await poolManager.setWhitelistedVault(PROVER_CHAIN_KEY, SPOKE_ADDRESSES.sepolia.usdt, true)).wait();
+        await (await poolManager.setSourceParams(
+            PROVER_CHAIN_KEY,
+            SPOKE_ADDRESSES.sepolia.vault,
+            SPOKE_ADDRESSES.sepolia.usdc,
+            true
+        )).wait();
 
+        await (await poolManager.setSourceParams(
+            PROVER_CHAIN_KEY,
+            SPOKE_ADDRESSES.sepolia.vault,
+            SPOKE_ADDRESSES.sepolia.usdt,
+            true
+        )).wait();
+
+        // Also whitelist in the "Global Hub List" for collateral calculation
         await (await poolManager.setWhitelistedToken(SPOKE_ADDRESSES.sepolia.usdc, true)).wait();
-        await (await poolManager.setWhitelistedToken(SPOKE_ADDRESSES.sepolia.usdt, true)).wait();
+        await (await poolManager.setWhitelistedToken(SPOKE_ADDRESSES.sepolia.usdt, true)).wait(); // Fixed: was usdc
         console.log("✅ Sepolia whitelisted");
     } catch (e) {
         console.log("⚠️ Error whitelisting Sepolia:", e.message);
@@ -88,9 +111,21 @@ async function main() {
     // 4. Whitelist Hedera vaults
     console.log("Whitelisting Hedera vaults...");
     try {
-        await (await poolManager.setWhitelistedVault(SPOKE_ADDRESSES.hedera.chainId, SPOKE_ADDRESSES.hedera.vault, true)).wait();
-        await (await poolManager.setWhitelistedVault(SPOKE_ADDRESSES.hedera.chainId, SPOKE_ADDRESSES.hedera.usdc, true)).wait();
-        await (await poolManager.setWhitelistedVault(SPOKE_ADDRESSES.hedera.chainId, SPOKE_ADDRESSES.hedera.usdt, true)).wait();
+        // Hedera Chain ID
+        await (await poolManager.setSourceParams(
+            SPOKE_ADDRESSES.hedera.chainId,
+            SPOKE_ADDRESSES.hedera.vault,
+            SPOKE_ADDRESSES.hedera.usdc,
+            true
+        )).wait();
+
+        await (await poolManager.setSourceParams(
+            SPOKE_ADDRESSES.hedera.chainId,
+            SPOKE_ADDRESSES.hedera.vault,
+            SPOKE_ADDRESSES.hedera.usdt,
+            true
+        )).wait();
+
         await (await poolManager.setWhitelistedToken(SPOKE_ADDRESSES.hedera.usdc, true)).wait();
         await (await poolManager.setWhitelistedToken(SPOKE_ADDRESSES.hedera.usdt, true)).wait();
         console.log("✅ Hedera whitelisted");

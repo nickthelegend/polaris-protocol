@@ -92,12 +92,19 @@ async function main() {
     // Whitelist "Local" Spoke (Chain ID 1337)
     // We treat Ganache as both Master and Spoke 1
     const CHAIN_ID = 1337;
-    await (await poolManager.setWhitelistedVault(CHAIN_ID, vaultAddr, true)).wait();
-    await (await poolManager.setWhitelistedVault(CHAIN_ID, usdcAddr, true)).wait();
-    await (await poolManager.setWhitelistedVault(CHAIN_ID, usdtAddr, true)).wait();
+    console.log(`   - Configuring Chain ${CHAIN_ID} (Local)...`);
+
+    // 1. Register USDC Source Params (Vault + Token + Whitelist)
+    await (await poolManager.setSourceParams(CHAIN_ID, vaultAddr, usdcAddr, true)).wait();
+
+    // 2. Register USDT Source Params
+    await (await poolManager.setSourceParams(CHAIN_ID, vaultAddr, usdtAddr, true)).wait();
+
+    // 3. Whitelist tokens for Global Collateral usage (Hub Logic)
     await (await poolManager.setWhitelistedToken(usdcAddr, true)).wait();
     await (await poolManager.setWhitelistedToken(usdtAddr, true)).wait();
-    console.log("   - Local Vault Whitelisted");
+
+    console.log("   - Local Vault & Tokens Configured via setSourceParams");
 
     // ===========================================
     // 4. Output

@@ -1,11 +1,11 @@
 {
   "master": {
-    "network": "uscTestnetV2",
-    "chainId": "102036",
-    "poolManager": "0xB159E0c8093081712c92e274DbFEa5A97A80cA30",
-    "loanEngine": "0x38E9cDB0eBc128bEA55c36C03D5532697669132d",
-    "scoreManager": "0x214730188780a3A64fD24ede85f2724535772Ff0",
-    "evmV1Decoder": "0x84373D817230268b2dE1d7727ca3c930293CCE51"
+    "network": "ganache",
+    "chainId": "1337",
+    "poolManager": "0x2a2cc16e7fa8E84169cD1c3bA79b37F2d1577B5F",
+    "loanEngine": "0xdBA667c63045cceF16fa97DA7512A46cB02AD8FA",
+    "scoreManager": "0x856442b9DD170cFDE24eB1cdF5F68E1A97e8C5E9",
+    "evmV1Decoder": "0x412ec75F5dBFF6D912D0780744dd77C97E1De2a7"
   },
   "spokes": {
     "sepolia": {
