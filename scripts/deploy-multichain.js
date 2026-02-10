@@ -146,23 +146,32 @@ async function main() {
         // Whitelist spoke vaults in PoolManager
         console.log("  🔧 Whitelisting spoke vaults...");
 
-        // Sepolia (chainKey = 11155111)
+        const PROVER_SEPOLIA_KEY = 1;
+
+        // Sepolia (chainKey = 11155111 AND Prover Key = 1)
         if (deploymentAddresses.spokes.sepolia.VAULT) {
-            await poolManager.setWhitelistedVault(11155111, deploymentAddresses.spokes.sepolia.VAULT, true);
-            await poolManager.setWhitelistedVault(11155111, deploymentAddresses.spokes.sepolia.USDC, true);
-            await poolManager.setWhitelistedVault(11155111, deploymentAddresses.spokes.sepolia.USDT, true);
-            await poolManager.setWhitelistedToken(deploymentAddresses.spokes.sepolia.USDC, true);
-            await poolManager.setWhitelistedToken(deploymentAddresses.spokes.sepolia.USDT, true);
+            console.log("  🔗 Configuring Sepolia (11155111 & 1)...");
+
+            // Standard ID
+            await (await poolManager.setSourceParams(11155111, deploymentAddresses.spokes.sepolia.VAULT, deploymentAddresses.spokes.sepolia.USDC, true)).wait();
+            await (await poolManager.setSourceParams(11155111, deploymentAddresses.spokes.sepolia.VAULT, deploymentAddresses.spokes.sepolia.USDT, true)).wait();
+
+            // Prover Key
+            await (await poolManager.setSourceParams(PROVER_SEPOLIA_KEY, deploymentAddresses.spokes.sepolia.VAULT, deploymentAddresses.spokes.sepolia.USDC, true)).wait();
+            await (await poolManager.setSourceParams(PROVER_SEPOLIA_KEY, deploymentAddresses.spokes.sepolia.VAULT, deploymentAddresses.spokes.sepolia.USDT, true)).wait();
+
+            await (await poolManager.setWhitelistedToken(deploymentAddresses.spokes.sepolia.USDC, true)).wait();
+            await (await poolManager.setWhitelistedToken(deploymentAddresses.spokes.sepolia.USDT, true)).wait();
             console.log("  ✅ Sepolia vaults whitelisted");
         }
 
         // Hedera (chainKey = 296)
         if (deploymentAddresses.spokes.hedera.VAULT) {
-            await poolManager.setWhitelistedVault(296, deploymentAddresses.spokes.hedera.VAULT, true);
-            await poolManager.setWhitelistedVault(296, deploymentAddresses.spokes.hedera.USDC, true);
-            await poolManager.setWhitelistedVault(296, deploymentAddresses.spokes.hedera.USDT, true);
-            await poolManager.setWhitelistedToken(deploymentAddresses.spokes.hedera.USDC, true);
-            await poolManager.setWhitelistedToken(deploymentAddresses.spokes.hedera.USDT, true);
+            console.log("  🔗 Configuring Hedera (296)...");
+            await (await poolManager.setSourceParams(296, deploymentAddresses.spokes.hedera.VAULT, deploymentAddresses.spokes.hedera.USDC, true)).wait();
+            await (await poolManager.setSourceParams(296, deploymentAddresses.spokes.hedera.VAULT, deploymentAddresses.spokes.hedera.USDT, true)).wait();
+            await (await poolManager.setWhitelistedToken(deploymentAddresses.spokes.hedera.USDC, true)).wait();
+            await (await poolManager.setWhitelistedToken(deploymentAddresses.spokes.hedera.USDT, true)).wait();
             console.log("  ✅ Hedera vaults whitelisted");
         }
 

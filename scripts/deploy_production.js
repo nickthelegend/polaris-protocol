@@ -50,14 +50,22 @@ async function main() {
         addresses[network].ctc = await ctc.getAddress();
         addresses[network].liquidityVault = vaultAddress;
 
-    } else if (network === "uscTestnet") {
-        console.log("--- Deploying to USC Testnet ---");
+    } else if (network === "uscTestnet" || network === "uscTestnetV2") {
+        console.log(`--- Deploying to ${network} ---`);
 
-        const PROVER_ADDRESS = "0xc43402c66e88f38a5aa6e35113b310e1c19571d4"; // Official USC Prover
+        // 0. Deploy EvmV1Decoder library
+        console.log("  📚 Deploying EvmV1Decoder library...");
+        const EvmV1Decoder = await hre.ethers.getContractFactory("EvmV1Decoder");
+        const decoder = await EvmV1Decoder.deploy();
+        await decoder.waitForDeployment();
+        const decoderAddress = await decoder.getAddress();
+        console.log(`  ✅ EvmV1Decoder deployed at: ${decoderAddress}`);
 
         // 1. Deploy PoolManager
-        const PoolManager = await hre.ethers.getContractFactory("PoolManager");
-        const poolManager = await PoolManager.deploy(PROVER_ADDRESS);
+        const PoolManager = await hre.ethers.getContractFactory("PoolManager", {
+            libraries: { EvmV1Decoder: decoderAddress }
+        });
+        const poolManager = await PoolManager.deploy(hre.ethers.ZeroAddress);
         await poolManager.waitForDeployment();
         const poolManagerAddress = await poolManager.getAddress();
         console.log("PoolManager deployed to:", poolManagerAddress);
@@ -79,8 +87,10 @@ async function main() {
         console.log("ScoreManager deployed to:", scoreManagerAddress);
 
         // 3. Deploy LoanEngine
-        const LoanEngine = await hre.ethers.getContractFactory("LoanEngine");
-        const loanEngine = await LoanEngine.deploy(scoreManagerAddress, poolManagerAddress);
+        const LoanEngine = await hre.ethers.getContractFactory("LoanEngine", {
+            libraries: { EvmV1Decoder: decoderAddress }
+        });
+        const loanEngine = await LoanEngine.deploy(scoreManagerAddress, poolManagerAddress, hre.ethers.ZeroAddress);
         await loanEngine.waitForDeployment();
         const loanEngineAddress = await loanEngine.getAddress();
         console.log("LoanEngine deployed to:", loanEngineAddress);
@@ -105,6 +115,39 @@ async function main() {
         addresses.scoreManager = scoreManagerAddress;
         addresses.loanEngine = loanEngineAddress;
         addresses.merchantRouter = merchantRouterAddress;
+        addresses.evmV1Decoder = decoderAddress;
+
+        // --- 7. Configure Source Chains ---
+        console.log("Configuring source chains in PoolManager...");
+
+        // Configure Sepolia (Chain ID 11155111 AND Prover Key 1)
+        if (addresses.sepolia) {
+            console.log("  🔗 Linking Sepolia...");
+            const PROVER_KEY = 1;
+            const CHAIN_ID = 11155111;
+            const vault = addresses.sepolia.liquidityVault;
+
+            // Standard ID
+            await (await poolManager.setSourceParams(CHAIN_ID, vault, addresses.sepolia.usdc, true)).wait();
+            await (await poolManager.setSourceParams(CHAIN_ID, vault, addresses.sepolia.usdt, true)).wait();
+
+            // Prover Key
+            await (await poolManager.setSourceParams(PROVER_KEY, vault, addresses.sepolia.usdc, true)).wait();
+            await (await poolManager.setSourceParams(PROVER_KEY, vault, addresses.sepolia.usdt, true)).wait();
+
+            console.log("  ✅ Sepolia linked");
+        }
+
+        // Configure Hedera if available
+        if (addresses.hedera) {
+            console.log("  🔗 Linking Hedera...");
+            const CHAIN_ID = 296;
+            const vault = addresses.hedera.liquidityVault;
+            await (await poolManager.setSourceParams(CHAIN_ID, vault, addresses.hedera.usdc, true)).wait();
+            await (await poolManager.setSourceParams(CHAIN_ID, vault, addresses.hedera.usdt, true)).wait();
+            console.log("  ✅ Hedera linked");
+        }
+
     }
 
     fs.writeFileSync(addressesPath, JSON.stringify(addresses, null, 2));
