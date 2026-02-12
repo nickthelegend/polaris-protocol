@@ -14,7 +14,7 @@ module.exports = {
         },
         ganache: {
             url: "http://127.0.0.1:7545",
-            accounts: ["0xf73afbfc49debeedcfe11cdb8af4cba28a56d1766524e78763805f57209ee717"],
+            accounts: ["0xdb8cfa2db2a866e6fea3d4388da2278f8ef7367180d5921b96661d946b244c86"],
         },
         ctcTestnet: {
             url: "https://rpc.cc3-testnet.creditcoin.network",

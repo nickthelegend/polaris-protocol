@@ -49,6 +49,15 @@ async function main() {
     const scoreManagerAddress = await scoreManager.getAddress();
     console.log(`✅ ScoreManager: ${scoreManagerAddress}`);
 
+    // Deploy ProtocolFunds
+    console.log("\n📝 Deploying ProtocolFunds...");
+    const ProtocolFunds = await hre.ethers.getContractFactory("ProtocolFunds");
+    // Admin: 0xcCED528A5b70e16c8131Cb2de424564dD938fD3B
+    const protocolFunds = await ProtocolFunds.deploy("0xcCED528A5b70e16c8131Cb2de424564dD938fD3B");
+    await protocolFunds.waitForDeployment();
+    const protocolFundsAddress = await protocolFunds.getAddress();
+    console.log(`✅ ProtocolFunds: ${protocolFundsAddress}`);
+
     // Deploy LoanEngine (with library linking)
     console.log("\n📝 Deploying LoanEngine...");
     const LoanEngine = await hre.ethers.getContractFactory("LoanEngine", {
@@ -57,7 +66,8 @@ async function main() {
     const loanEngine = await LoanEngine.deploy(
         scoreManagerAddress,
         poolManagerAddress,
-        hre.ethers.ZeroAddress // Use native verifier
+        hre.ethers.ZeroAddress, // Use native verifier
+        protocolFundsAddress
     );
     await loanEngine.waitForDeployment();
     const loanEngineAddress = await loanEngine.getAddress();
@@ -111,6 +121,7 @@ async function main() {
     console.log(`PoolManager:     ${poolManagerAddress}`);
     console.log(`LoanEngine:      ${loanEngineAddress}`);
     console.log(`ScoreManager:    ${scoreManagerAddress}`);
+    console.log(`ProtocolFunds:   ${protocolFundsAddress}`);
     console.log(`EvmV1Decoder:    ${decoderAddress}`);
     console.log("=".repeat(60));
 
@@ -123,6 +134,7 @@ async function main() {
             poolManager: poolManagerAddress,
             loanEngine: loanEngineAddress,
             scoreManager: scoreManagerAddress,
+            protocolFunds: protocolFundsAddress,
             evmV1Decoder: decoderAddress
         },
         spokes: SPOKE_ADDRESSES

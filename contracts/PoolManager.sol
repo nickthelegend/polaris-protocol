@@ -11,9 +11,14 @@ contract PoolManager is Ownable, ReentrancyGuard {
     address public loanEngine;
     bytes32 public constant TRANSFER_EVENT_SIGNATURE = 0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef;
 
-    struct Pool { uint256 totalLiquidity; address tokenOnSource; }
+    struct Pool { 
+        uint256 totalLiquidity; 
+        uint256 totalShares;
+        address tokenOnSource; 
+    }
     mapping(address => Pool) public pools;
-    mapping(address => mapping(address => uint256)) public lpBalance;
+    // user => token => shares
+    mapping(address => mapping(address => uint256)) public lpShares;
     mapping(bytes32 => bool) public processedQueries;
     
     // Mapping of ChainID => TokenAddress => IsWhitelisted
@@ -106,12 +111,19 @@ contract PoolManager is Ownable, ReentrancyGuard {
                 if (toAddr == trustedVault) {
                     uint256 amount = abi.decode(logs[i].data, (uint256));
                     
-                    // Use the Source Token Address as the Pool Key
-                    // This maps Sepolia-USDC -> Pool Info
-                    pools[tokenAddress].totalLiquidity += amount;
-                    pools[tokenAddress].tokenOnSource = tokenAddress;
+                    Pool storage pool = pools[tokenAddress];
+                    uint256 sharesToMint;
+                    if (pool.totalShares == 0) {
+                        sharesToMint = amount;
+                    } else {
+                        sharesToMint = (amount * pool.totalShares) / pool.totalLiquidity;
+                    }
                     
-                    lpBalance[lender][tokenAddress] += amount;
+                    pool.totalLiquidity += amount;
+                    pool.totalShares += sharesToMint;
+                    pool.tokenOnSource = tokenAddress;
+                    
+                    lpShares[lender][tokenAddress] += sharesToMint;
                     processed = true;
                     emit LiquidityAdded(lender, tokenAddress, amount);
                     
@@ -134,18 +146,36 @@ contract PoolManager is Ownable, ReentrancyGuard {
 
     function getUserTotalCollateral(address user) public view returns (uint256) {
         uint256 total = 0;
-        // This iteration is imperfect if we have many tokens, but for testnet with 2 tokens it's fine.
-        // It sums LP balances of 'whitelistedTokens' which are mapped in the Hub.
         for (uint256 i = 0; i < whitelistedTokens.length; i++) {
-            if (isTokenWhitelisted[whitelistedTokens[i]]) total += lpBalance[user][whitelistedTokens[i]];
+            address token = whitelistedTokens[i];
+            if (isTokenWhitelisted[token]) {
+                total += getAssetBalance(user, token);
+            }
         }
         return total;
     }
 
+    /**
+     * @dev Calculates the underlying asset balance for a user.
+     */
+    function getAssetBalance(address user, address token) public view returns (uint256) {
+        Pool storage pool = pools[token];
+        if (pool.totalShares == 0) return 0;
+        return (lpShares[user][token] * pool.totalLiquidity) / pool.totalShares;
+    }
+
     function requestWithdrawal(address tokenOnSource, uint256 amount, uint64 destChainId) external nonReentrant {
-        require(lpBalance[msg.sender][tokenOnSource] >= amount, "Insufficient LP balance");
-        lpBalance[msg.sender][tokenOnSource] -= amount;
-        pools[tokenOnSource].totalLiquidity -= amount;
+        Pool storage pool = pools[tokenOnSource];
+        uint256 userBalance = getAssetBalance(msg.sender, tokenOnSource);
+        require(userBalance >= amount, "Insufficient LP balance");
+
+        // Calculate shares to burn
+        uint256 sharesToBurn = (amount * pool.totalShares) / pool.totalLiquidity;
+        
+        lpShares[msg.sender][tokenOnSource] -= sharesToBurn;
+        pool.totalShares -= sharesToBurn;
+        pool.totalLiquidity -= amount;
+        
         emit WithdrawalAuthorized(msg.sender, tokenOnSource, amount, withdrawalNonce, destChainId);
         withdrawalNonce++;
         emit LiquidityWithdrawn(msg.sender, tokenOnSource, amount);
@@ -153,9 +183,22 @@ contract PoolManager is Ownable, ReentrancyGuard {
 
     function slashLiquidity(address user, address token, uint256 amount) external {
         require(msg.sender == loanEngine, "Only LoanEngine");
-        uint256 slashAmount = amount > lpBalance[user][token] ? lpBalance[user][token] : amount;
-        lpBalance[user][token] -= slashAmount;
-        emit LiquiditySlashed(user, token, slashAmount);
+        Pool storage pool = pools[token];
+        uint256 userBalance = getAssetBalance(user, token);
+        uint256 slashAmount = amount > userBalance ? userBalance : amount;
+        
+        if (slashAmount > 0) {
+            uint256 sharesToBurn = (slashAmount * pool.totalShares) / pool.totalLiquidity;
+            lpShares[user][token] -= sharesToBurn;
+            pool.totalShares -= sharesToBurn;
+            pool.totalLiquidity -= slashAmount;
+            emit LiquiditySlashed(user, token, slashAmount);
+        }
+    }
+
+    function distributeInterest(address token, uint256 amount) external {
+        require(msg.sender == loanEngine, "Only LoanEngine");
+        pools[token].totalLiquidity += amount;
     }
 
     function getPoolLiquidity(address token) external view returns (uint256) {
