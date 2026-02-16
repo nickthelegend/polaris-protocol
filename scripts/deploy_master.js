@@ -31,9 +31,16 @@ async function main() {
         const poolManagerAddress = await poolManager.getAddress();
         console.log("PoolManager deployed to:", poolManagerAddress);
 
+        // 2.5. Deploy CreditOracle
+        const CreditOracle = await hre.ethers.getContractFactory("CreditOracle");
+        const creditOracle = await CreditOracle.deploy(deployer.address); // Initial attester is deployer
+        await creditOracle.waitForDeployment();
+        const creditOracleAddress = await creditOracle.getAddress();
+        console.log("CreditOracle deployed to:", creditOracleAddress);
+
         // 3. Deploy ScoreManager
         const ScoreManager = await hre.ethers.getContractFactory("ScoreManager");
-        const scoreManager = await ScoreManager.deploy(poolManagerAddress);
+        const scoreManager = await ScoreManager.deploy(poolManagerAddress, creditOracleAddress);
         await scoreManager.waitForDeployment();
         const scoreManagerAddress = await scoreManager.getAddress();
         console.log("ScoreManager deployed to:", scoreManagerAddress);

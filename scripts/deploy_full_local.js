@@ -37,13 +37,27 @@ async function main() {
     console.log("Tokens whitelisted in LiquidityVault");
 
     // 3. Deploy Hub Infrastructure (Master)
-    const PoolManager = await hre.ethers.getContractFactory("PoolManager");
+    const EvmV1Decoder = await hre.ethers.getContractFactory("EvmV1Decoder");
+    const evmV1Decoder = await EvmV1Decoder.deploy();
+    await evmV1Decoder.waitForDeployment();
+    console.log("EvmV1Decoder deployed to:", evmV1Decoder.target);
+
+    const PoolManager = await hre.ethers.getContractFactory("PoolManager", {
+        libraries: {
+            EvmV1Decoder: evmV1Decoder.target,
+        },
+    });
     const poolManager = await PoolManager.deploy(oracle.target);
     await poolManager.waitForDeployment();
     console.log("PoolManager deployed to:", poolManager.target);
 
+    const CreditOracle = await hre.ethers.getContractFactory("CreditOracle");
+    const creditOracle = await CreditOracle.deploy(deployer.address);
+    await creditOracle.waitForDeployment();
+    console.log("CreditOracle deployed to:", creditOracle.target);
+
     const ScoreManager = await hre.ethers.getContractFactory("ScoreManager");
-    const scoreManager = await ScoreManager.deploy(poolManager.target);
+    const scoreManager = await ScoreManager.deploy(poolManager.target, creditOracle.target);
     await scoreManager.waitForDeployment();
     console.log("ScoreManager deployed to:", scoreManager.target);
 
@@ -57,13 +71,22 @@ async function main() {
     await creditVault.waitForDeployment();
     console.log("CreditVault deployed to:", creditVault.target);
 
-    const LoanEngine = await hre.ethers.getContractFactory("LoanEngine");
-    const loanEngine = await LoanEngine.deploy(scoreManager.target, poolManager.target);
+    const ProtocolFunds = await hre.ethers.getContractFactory("ProtocolFunds");
+    const protocolFunds = await ProtocolFunds.deploy(deployer.address);
+    await protocolFunds.waitForDeployment();
+    console.log("ProtocolFunds deployed to:", protocolFunds.target);
+
+    const LoanEngine = await hre.ethers.getContractFactory("LoanEngine", {
+        libraries: {
+            EvmV1Decoder: evmV1Decoder.target,
+        },
+    });
+    const loanEngine = await LoanEngine.deploy(scoreManager.target, poolManager.target, oracle.target, protocolFunds.target);
     await loanEngine.waitForDeployment();
     console.log("LoanEngine deployed to:", loanEngine.target);
 
     const MerchantRouter = await hre.ethers.getContractFactory("MerchantRouter");
-    const merchantRouter = await MerchantRouter.deploy(loanEngine.target);
+    const merchantRouter = await MerchantRouter.deploy(poolManager.target, loanEngine.target);
     await merchantRouter.waitForDeployment();
     console.log("MerchantRouter deployed to:", merchantRouter.target);
 
@@ -84,8 +107,11 @@ async function main() {
         ctc: ctc.target,
         liquidityVault: liquidityVault.target,
         oracle: oracle.target,
+        evmV1Decoder: evmV1Decoder.target,
         poolManager: poolManager.target,
+        creditOracle: creditOracle.target,
         scoreManager: scoreManager.target,
+        protocolFunds: protocolFunds.target,
         insurancePool: insurancePool.target,
         creditVault: creditVault.target,
         loanEngine: loanEngine.target,

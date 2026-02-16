@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./PoolManager.sol";
+import "./CreditOracle.sol";
 
 /**
  * @title ScoreManager
@@ -10,6 +11,7 @@ import "./PoolManager.sol";
  */
 contract ScoreManager is Ownable {
     PoolManager public poolManager;
+    CreditOracle public creditOracle;
 
     // Minimum score starts at 300 (Like FICO)
     uint256 public constant MIN_SCORE = 300;
@@ -19,9 +21,11 @@ contract ScoreManager is Ownable {
     mapping(address => uint256) public totalRepaidMap;
 
     event ScoreUpdated(address indexed user, uint256 newScore, string reason);
+    event OracleUpdated(address indexed newOracle);
 
-    constructor(address _poolManager) Ownable(msg.sender) {
+    constructor(address _poolManager, address _creditOracle) Ownable(msg.sender) {
         poolManager = PoolManager(_poolManager);
+        creditOracle = CreditOracle(_creditOracle);
     }
 
     /**
@@ -64,27 +68,41 @@ contract ScoreManager is Ownable {
         updateScore(user, 5, "Repayment Bonus");
     }
 
+    function setCreditOracle(address _creditOracle) external onlyOwner {
+        creditOracle = CreditOracle(_creditOracle);
+        emit OracleUpdated(_creditOracle);
+    }
+
     /**
      * @dev Calculates the max borrow amount for a user.
-     * Formula: Collateral * (Score / 1000) multiplier.
-     * E.g. $1000 Collat * (300/1000) = $300 limit (30% LTV)
-     * E.g. $1000 Collat * (800/1000) = $800 limit (80% LTV)
-     */
-    /**
-     * @dev Calculates the max borrow amount for a user.
-     * Formula: Total Aggregated Collateral * (Score / 1000).
-     * This sums liquidity across all chains (Base, Arbitrum, Sepolia) as verified by PoolManager.
+     * Formula: (Total Native Collateral + External Net Value) * (Score / 1000).
+     * This sums liquidity across local pools and aggregated Aave/Morpho/Compound data.
      */
     function getCreditLimit(address user) public view returns (uint256) {
         // 1. Get user total aggregated collateral across all chains/tokens from PoolManager
-        uint256 totalCollateral = poolManager.getUserTotalCollateral(user);
+        uint256 nativeCollateral = poolManager.getUserTotalCollateral(user);
         
-        if (totalCollateral == 0) return 0;
+        // 2. Get external net value from Oracle (Attested Aave/Morpho/Compound data)
+        int256 externalNetValue = creditOracle.getExternalNetValue(user);
+        
+        uint256 totalEffectiveCollateral;
+        if (externalNetValue > 0) {
+            totalEffectiveCollateral = nativeCollateral + uint256(externalNetValue);
+        } else {
+            // If debt > collateral externally, it reduces native borrowing power
+            uint256 debtToSubtract = uint256(-externalNetValue);
+            if (debtToSubtract >= nativeCollateral) {
+                totalEffectiveCollateral = 0;
+            } else {
+                totalEffectiveCollateral = nativeCollateral - debtToSubtract;
+            }
+        }
+
+        if (totalEffectiveCollateral == 0) return 0;
 
         uint256 score = getScore(user);
         
         // Multiplier: Score / 1000
-        // E.g. $1000 Total Value * (300/1000) = $300 Global limit
-        return (totalCollateral * score) / 1000;
+        return (totalEffectiveCollateral * score) / 1000;
     }
 }
