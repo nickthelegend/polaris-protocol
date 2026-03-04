@@ -1,4 +1,5 @@
 require("@nomicfoundation/hardhat-toolbox");
+require("dotenv").config();
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
@@ -19,31 +20,36 @@ module.exports = {
         ctcTestnet: {
             url: "https://rpc.cc3-testnet.creditcoin.network",
             chainId: 102031,
-            accounts: ["0xc1c46d8f06533e4aa0899a933ee5ba8556b244b7f262cf1b4702c575257956a2"],
-        },
-        uscTestnet: {
-            url: "https://rpc.usc-testnet.creditcoin.network",
-            chainId: 102033,
-            accounts: ["0xc1c46d8f06533e4aa0899a933ee5ba8556b244b7f262cf1b4702c575257956a2"],
-        },
-        sepolia: {
-            url: "https://1rpc.io/sepolia",
-            accounts: ["0xc1c46d8f06533e4aa0899a933ee5ba8556b244b7f262cf1b4702c575257956a2"],
-        },
-        baseSepolia: {
-            url: "https://sepolia.base.org",
-            accounts: ["0xc1c46d8f06533e4aa0899a933ee5ba8556b244b7f262cf1b4702c575257956a2"],
-            chainId: 84532
+            accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
         },
         uscTestnetV2: {
             url: "https://rpc.usc-testnet2.creditcoin.network",
             chainId: 102036,
-            accounts: ["0xc1c46d8f06533e4aa0899a933ee5ba8556b244b7f262cf1b4702c575257956a2"],
+            accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
         },
-        hederaTestnet: {
-            url: "https://testnet.hashio.io/api",
-            chainId: 296,
-            accounts: ["0xc1c46d8f06533e4aa0899a933ee5ba8556b244b7f262cf1b4702c575257956a2"],
+        sepolia: {
+            url: "https://1rpc.io/sepolia",
+            accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+        },
+        baseSepolia: {
+            url: String("https://base-sepolia.api.onfinality.io/public"),
+            accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+            chainId: 84532,
+        },
+        fuji: {
+            url: "https://api.avax-test.network/ext/bc/C/rpc",
+            chainId: 43113,
+            accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+        },
+        monadTestnet: {
+            url: String("https://testnet-rpc.monad.xyz/"),
+            accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+            chainId: 20143,
+        },
+        cronosTestnet: {
+            url: String("https://evm-t3.cronos.org"),
+            accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+            chainId: 338,
         }
     }
 };
